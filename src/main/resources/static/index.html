@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Car Rental Web App</title>
+  <link rel="icon" type="image/jpg" href="/images/car_favicon.jpg?v=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Loại bỏ moment.js nếu không dùng cho các trường hợp khác -->
+  <!-- <script src="https://momentjs.com/downloads/moment.js"></script> -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<!-- (Giữ nguyên phần body như bạn cung cấp) -->
+<div class="flex min-h-screen">
+  <div class="sidebar w-64 bg-gray-800 text-white p-4 flex flex-col">
+    <h1 class="text-2xl font-bold mb-6 flex items-center">
+      <i class="fas fa-car mr-2"></i> Car Rental
+    </h1>
+    <nav>
+      <ul>
+        <li><button onclick="showSection('createBooking')" class="w-full text-left py-2 px-4 hover:bg-gray-700 rounded flex items-center"><i class="fas fa-plus mr-2"></i> Create Booking</button></li>
+        <li><button onclick="showSection('pickUpCar')" class="w-full text-left py-2 px-4 hover:bg-gray-700 rounded flex items-center"><i class="fas fa-check mr-2"></i> Pick Up Car</button></li>
+        <li><button onclick="showSection('returnCar')" class="w-full text-left py-2 px-4 hover:bg-gray-700 rounded flex items-center"><i class="fas fa-undo mr-2"></i> Return Car</button></li>
+        <li><button onclick="showSection('cancelBooking')" class="w-full text-left py-2 px-4 hover:bg-gray-700 rounded flex items-center"><i class="fas fa-times mr-2"></i> Cancel Booking</button></li>
+        <li><button onclick="showSection('processPayment')" class="w-full text-left py-2 px-4 hover:bg-gray-700 rounded flex items-center"><i class="fas fa-credit-card mr-2"></i> Process Payment</button></li>
+        <li><button onclick="showSection('pickedUpBookings')" class="w-full text-left py-2 px-4 hover:bg-gray-700 rounded flex items-center"><i class="fas fa-list mr-2"></i> View Picked-Up Bookings</button></li>
+      </ul>
+    </nav>
+  </div>
+
+  <div class="content p-6">
+    <div id="createBooking" class="section hidden bg-white p-4 rounded-lg shadow-lg">
+      <h2 class="text-xl font-semibold text-gray-700 mb-3">Create a Booking</h2>
+      <div class="space-y-3">
+        <div>
+          <label for="createCustomerId" class="block text-xs font-medium text-gray-600">Customer ID</label>
+          <input type="number" id="createCustomerId" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <div>
+          <label for="createEmployeeId" class="block text-xs font-medium text-gray-600">Employee ID</label>
+          <input type="number" id="createEmployeeId" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <div>
+          <label for="createCarId" class="block text-xs font-medium text-gray-600">Car ID</label>
+          <input type="number" id="createCarId" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <div>
+          <label for="createStartDate" class="block text-xs font-medium text-gray-600">Start Date</label>
+          <input type="date" id="createStartDate" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <div>
+          <label for="createEndDate" class="block text-xs font-medium text-gray-600">End Date</label>
+          <input type="date" id="createEndDate" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <div>
+          <label for="createStatus" class="block text-xs font-medium text-gray-600">Status</label>
+          <select id="createStatus" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+        <div>
+          <label for="createTotalAmount" class="block text-xs font-medium text-gray-600">Total Amount</label>
+          <input type="number" id="createTotalAmount" step="0.01" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <div>
+          <label for="createDiscountCode" class="block text-xs font-medium text-gray-600">Discount Code</label>
+          <input type="text" id="createDiscountCode" class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <button onclick="createBooking()" class="btn-hover w-full bg-purple-600 text-white p-2 text-sm rounded-md hover:bg-purple-700 transition">Create Booking</button>
+      </div>
+    </div>
+
+    <div id="pickUpCar" class="section hidden bg-white p-4 rounded-lg shadow-lg">
+      <h2 class="text-xl font-semibold text-gray-700 mb-3">Pick Up Car</h2>
+      <div class="space-y-3">
+        <div>
+          <label for="pickUpBookingId" class="block text-xs font-medium text-gray-600">Booking ID</label>
+          <input type="number" id="pickUpBookingId" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <button onclick="pickUpCar()" class="btn-hover w-full bg-blue-600 text-white p-2 text-sm rounded-md hover:bg-blue-700 transition">Submit Pick Up</button>
+      </div>
+    </div>
+
+    <div id="returnCar" class="section hidden bg-white p-4 rounded-lg shadow-lg">
+      <h2 class="text-xl font-semibold text-gray-700 mb-3">Return a Car</h2>
+      <div class="space-y-3">
+        <div>
+          <label for="returnBookingId" class="block text-xs font-medium text-gray-600">Booking ID</label>
+          <input type="number" id="returnBookingId" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <div>
+          <label for="returnDate" class="block text-xs font-medium text-gray-600">Return Date</label>
+          <input type="date" id="returnDate" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <div>
+          <label for="carCondition" class="block text-xs font-medium text-gray-600">Car Condition</label>
+          <select id="carCondition" class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+            <option value="good">Good</option>
+            <option value="damaged">Damaged</option>
+            <option value="needs_repair">Needs Repair</option>
+          </select>
+        </div>
+        <div>
+          <label for="additionalFees" class="block text-xs font-medium text-gray-600">Additional Fees</label>
+          <input type="number" id="additionalFees" step="0.01" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <button id="submitReturn" class="btn-hover w-full bg-indigo-600 text-white p-2 text-sm rounded-md hover:bg-indigo-700 transition">Submit Return</button>
+      </div>
+    </div>
+
+    <div id="cancelBooking" class="section hidden bg-white p-4 rounded-lg shadow-lg">
+      <h2 class="text-xl font-semibold text-gray-700 mb-3">Cancel a Booking</h2>
+      <div class="space-y-3">
+        <div>
+          <label for="cancelBookingId" class="block text-xs font-medium text-gray-600">Booking ID</label>
+          <input type="number" id="cancelBookingId" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <button id="submitCancel" class="btn-hover w-full bg-red-600 text-white p-2 text-sm rounded-md hover:bg-red-700 transition">Submit Cancel</button>
+      </div>
+    </div>
+
+    <div id="processPayment" class="section hidden bg-white p-4 rounded-lg shadow-lg">
+      <h2 class="text-xl font-semibold text-gray-700 mb-3">Process Payment</h2>
+      <div class="space-y-3">
+        <div>
+          <label for="paymentBookingId" class="block text-xs font-medium text-gray-600">Booking ID</label>
+          <input type="number" id="paymentBookingId" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <div>
+          <label for="paymentDate" class="block text-xs font-medium text-gray-600">Payment Date</label>
+          <input type="date" id="paymentDate" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+        </div>
+        <div>
+          <label for="paymentMethod" class="block text-xs font-medium text-gray-600">Method</label>
+          <select id="paymentMethod" name="paymentMethod">
+            <option value="CASH">Cash</option>
+            <option value="CREDIT_CARD">Credit Card</option>
+          </select>
+        </div>
+        <button onclick="processPayment()" class="btn-hover w-full bg-green-600 text-white p-2 text-sm rounded-md hover:bg-green-700 transition">Submit Payment</button>
+      </div>
+    </div>
+
+    <div id="pickedUpBookings" class="section hidden bg-white p-4 rounded-lg shadow-lg">
+      <h2 class="text-xl font-semibold text-gray-700 mb-3">View Picked-Up Bookings</h2>
+      <button onclick="getPickedUpBookings()" class="btn-hover w-full bg-blue-600 text-white p-2 text-sm rounded-md hover:bg-blue-700 transition">Get Picked-Up Bookings</button>
+    </div>
+
+    <div id="response" class="bg-gray-50 p-4 rounded-md border border-gray-200 mt-4 hidden">
+      <div id="tableContainer"></div> <!-- Container cho bảng -->
+      <div id="messageContainer">
+        <pre class="text-sm text-gray-800"></pre> <!-- Container cho thông báo -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/scripts.js"></script>
+</body>
+</html>
