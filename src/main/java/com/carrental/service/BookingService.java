@@ -8,17 +8,13 @@ import com.carrental.dto.response.ReturnCarResponse;
 import com.carrental.dto.common.CarDto;
 import com.carrental.dto.common.CustomerDto;
 import com.carrental.dto.common.EmployeeDto;
-import com.carrental.dto.common.VehicleCategoryDto;
 import com.carrental.model.Booking;
 import com.carrental.model.Car;
 import com.carrental.model.Customer;
-import com.carrental.model.Discount;
 import com.carrental.model.Employee;
 import com.carrental.repository.BookingRepository;
 import com.carrental.repository.CarRepository;
-import com.carrental.repository.CustomerRepository;
-import com.carrental.repository.DiscountRepository;
-import com.carrental.repository.EmployeeRepository;
+import org.modelmapper.ModelMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +26,6 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,20 +34,25 @@ public class BookingService {
     private static final Logger logger = LoggerFactory.getLogger(BookingService.class);
 
     private final BookingRepository bookingRepository;
+    private final CarService carService;
+    private final CustomerService customerService;
+    private final EmployeeService employeeService;
+    private final DiscountService discountService;
     private final CarRepository carRepository;
-    private final CustomerRepository customerRepository;
-    private final EmployeeRepository employeeRepository;
-    private final DiscountRepository discountRepository;
+    private final ModelMapper modelMapper;
 
     @Autowired
-    public BookingService(BookingRepository bookingRepository, CarRepository carRepository,
-                          CustomerRepository customerRepository, EmployeeRepository employeeRepository,
-                          DiscountRepository discountRepository) {
+    public BookingService(BookingRepository bookingRepository, CarService carService,
+                          CustomerService customerService, EmployeeService employeeService,
+                          DiscountService discountService, CarRepository carRepository,
+                          ModelMapper modelMapper) {
         this.bookingRepository = bookingRepository;
+        this.carService = carService;
+        this.customerService = customerService;
+        this.employeeService = employeeService;
+        this.discountService = discountService;
         this.carRepository = carRepository;
-        this.customerRepository = customerRepository;
-        this.employeeRepository = employeeRepository;
-        this.discountRepository = discountRepository;
+        this.modelMapper = modelMapper;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -78,10 +78,6 @@ public class BookingService {
                 logger.error("Status is null or empty");
                 throw new IllegalArgumentException("Status must not be null or empty");
             }
-            if (request.getTotalAmount() == null || request.getTotalAmount().compareTo(BigDecimal.ZERO) <= 0) {
-                logger.error("Total amount is invalid: totalAmount={}", request.getTotalAmount());
-                throw new IllegalArgumentException("Total amount must be greater than 0");
-            }
 
             // Kiểm tra thời gian thuê hợp lý (tối thiểu 1 ngày, tối đa 30 ngày)
             long daysBetween = ChronoUnit.DAYS.between(request.getStartDate(), request.getEndDate());
@@ -94,10 +90,9 @@ public class BookingService {
                 throw new IllegalArgumentException("Rental period cannot exceed 30 days");
             }
 
-            // Tìm xe
+            // Tìm xe qua CarService
             logger.debug("Finding car with ID: {}", request.getCarId());
-            Car car = carRepository.findById(request.getCarId())
-                    .orElseThrow(() -> new IllegalArgumentException("Car not found with ID: " + request.getCarId()));
+            Car car = carService.getCarEntityById(request.getCarId());
             logger.debug("Found car: {}", car);
 
             // Kiểm tra trạng thái xe
@@ -117,16 +112,14 @@ public class BookingService {
                 }
             }
 
-            // Tìm khách hàng
+            // Tìm khách hàng qua CustomerService
             logger.debug("Finding customer with ID: {}", request.getCustomerId());
-            Customer customer = customerRepository.findById(request.getCustomerId())
-                    .orElseThrow(() -> new IllegalArgumentException("Customer not found with ID: " + request.getCustomerId()));
+            Customer customer = customerService.getCustomerEntityById(request.getCustomerId());
             logger.debug("Found customer: {}", customer);
 
-            // Tìm nhân viên
+            // Tìm nhân viên qua EmployeeService
             logger.debug("Finding employee with ID: {}", request.getEmployeeId());
-            Employee employee = employeeRepository.findById(request.getEmployeeId())
-                    .orElseThrow(() -> new IllegalArgumentException("Employee not found with ID: " + request.getEmployeeId()));
+            Employee employee = employeeService.getEmployeeEntityById(request.getEmployeeId());
             logger.debug("Found employee: {}", employee);
 
             // Kiểm tra ngày
@@ -141,28 +134,22 @@ public class BookingService {
                 throw new IllegalArgumentException("End date cannot be before start date");
             }
 
-            // Kiểm tra discount code nếu có
-            BigDecimal totalAmount = request.getTotalAmount();
-            if (request.getDiscountCode() != null && !request.getDiscountCode().trim().isEmpty()) {
-                logger.debug("Checking discount code: {}", request.getDiscountCode());
-                Optional<Discount> discountOpt = discountRepository.findById(request.getDiscountCode());
-                if (!discountOpt.isPresent()) {
-                    logger.warn("Discount code not found: {}", request.getDiscountCode());
-                    throw new IllegalArgumentException("Discount code not found: " + request.getDiscountCode());
-                }
-                Discount discount = discountOpt.get();
-                if (discount.getExpiryDate() != null && discount.getExpiryDate().isBefore(LocalDate.now())) {
-                    logger.warn("Discount code has expired: {}", request.getDiscountCode());
-                    throw new IllegalArgumentException("Discount code has expired: " + request.getDiscountCode());
-                }
-                // Áp dụng giảm giá (giả định giảm giá trực tiếp từ value)
-                BigDecimal discountValue = discount.getValue() != null ? discount.getValue() : BigDecimal.ZERO;
-                totalAmount = totalAmount.subtract(discountValue);
-                if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
-                    totalAmount = BigDecimal.ZERO;
-                }
-                logger.debug("Applied discount, new total amount: {}", totalAmount);
+            // Tính Total Amount dựa trên pricePerDay và số ngày
+            BigDecimal pricePerDay = car.getPricePerDay();
+            if (pricePerDay == null || pricePerDay.compareTo(BigDecimal.ZERO) <= 0) {
+                logger.error("Invalid pricePerDay for car: carId={}, pricePerDay={}", car.getId(), pricePerDay);
+                throw new IllegalArgumentException("Car price per day is invalid");
             }
+            BigDecimal totalAmount = pricePerDay.multiply(BigDecimal.valueOf(daysBetween));
+            logger.debug("Calculated total amount: pricePerDay={} x days={} = {}", pricePerDay, daysBetween, totalAmount);
+
+            // Áp dụng giảm giá qua DiscountService
+            BigDecimal discountAmount = discountService.calculateDiscount(request.getDiscountCode(), totalAmount);
+            totalAmount = totalAmount.subtract(discountAmount);
+            if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
+                totalAmount = BigDecimal.ZERO;
+            }
+            logger.debug("Applied discount, new total amount: {}", totalAmount);
 
             // Tạo và lưu booking
             logger.debug("Creating booking...");
@@ -188,7 +175,7 @@ public class BookingService {
             return savedBooking;
         } catch (Exception e) {
             logger.error("Error in bookCar: {}", e.getMessage(), e);
-            throw e; // Đảm bảo transaction rollback
+            throw e;
         }
     }
 
@@ -202,14 +189,14 @@ public class BookingService {
             booking.setStatus("picked_up");
             Booking updatedBooking = bookingRepository.save(booking);
             logger.info("Car picked up successfully for bookingId: {}", bookingId);
-            return mapToDto(updatedBooking); // Trả về DTO
+            return mapToPickupCarResponse(updatedBooking);
         } else {
             logger.error("Cannot pick up car, invalid status: bookingId={}, status={}", bookingId, booking.getStatus());
             throw new IllegalStateException("Booking must be in confirmed status to pick up, current status: " + booking.getStatus());
         }
     }
 
-    private PickupCarResponse mapToDto(Booking booking) {
+    private PickupCarResponse mapToPickupCarResponse(Booking booking) {
         PickupCarResponse dto = new PickupCarResponse();
         dto.setId(booking.getId());
         dto.setStartDate(booking.getStart_date());
@@ -217,37 +204,25 @@ public class BookingService {
         dto.setStatus(booking.getStatus());
         dto.setTotalAmount(booking.getTotal_amount());
         dto.setDiscountCode(booking.getDiscount_code());
-        dto.setReturnDate(booking.getReturn_date() != null ? booking.getReturn_date() : null);
-        dto.setCarCondition(booking.getCar_condition() != null ? booking.getCar_condition() : null);
+        dto.setReturnDate(booking.getReturn_date());
+        dto.setCarCondition(booking.getCar_condition());
         dto.setAdditionalFees(booking.getAdditional_fees() != null ? booking.getAdditional_fees() : BigDecimal.ZERO);
 
         // Ánh xạ Car
         if (booking.getCar() != null) {
-            CarDto carDto = new CarDto();
-            carDto.setId(booking.getCar().getId());
-            carDto.setLicensePlate(booking.getCar().getLicensePlate());
-            if (booking.getCar().getCategory() != null) {
-                VehicleCategoryDto categoryDto = new VehicleCategoryDto();
-                categoryDto.setId(booking.getCar().getCategory().getId());
-                categoryDto.setName(booking.getCar().getCategory().getName());
-                carDto.setCategory(categoryDto);
-            }
+            CarDto carDto = modelMapper.map(booking.getCar(), CarDto.class);
             dto.setCar(carDto);
         }
 
         // Ánh xạ Customer
         if (booking.getCustomer() != null) {
-            CustomerDto customerDto = new CustomerDto();
-            customerDto.setId(booking.getCustomer().getId());
-            customerDto.setName(booking.getCustomer().getName());
+            CustomerDto customerDto = modelMapper.map(booking.getCustomer(), CustomerDto.class);
             dto.setCustomer(customerDto);
         }
 
         // Ánh xạ Employee
         if (booking.getEmployee() != null) {
-            EmployeeDto employeeDto = new EmployeeDto();
-            employeeDto.setId(booking.getEmployee().getId());
-            employeeDto.setName(booking.getEmployee().getName());
+            EmployeeDto employeeDto = modelMapper.map(booking.getEmployee(), EmployeeDto.class);
             dto.setEmployee(employeeDto);
         }
 
@@ -258,7 +233,6 @@ public class BookingService {
     public ReturnCarResponse returnCar(Long bookingId, ReturnCarRequest request) {
         logger.debug("Processing return for bookingId: {}, request={}", bookingId, request);
 
-        // Kiểm tra dữ liệu đầu vào từ ReturnCarRequest
         if (request == null || request.getReturnDate() == null || request.getCarCondition() == null) {
             logger.error("Invalid return request: missing required fields");
             throw new IllegalArgumentException("Return date and car condition are required");
@@ -275,11 +249,12 @@ public class BookingService {
             Booking updatedBooking = bookingRepository.save(booking);
             logger.info("Car returned successfully for bookingId: {}", bookingId);
 
-            // Cập nhật trạng thái xe thành Available
+            // Cập nhật trạng thái xe
             Car car = booking.getCar();
             if (car != null) {
                 car.setStatus("Available");
                 carRepository.save(car);
+                logger.debug("Updated car status to Available: carId={}", car.getId());
             }
 
             return mapToReturnCarResponse(updatedBooking);
@@ -303,31 +278,19 @@ public class BookingService {
 
         // Ánh xạ Car
         if (booking.getCar() != null) {
-            CarDto carDto = new CarDto();
-            carDto.setId(booking.getCar().getId());
-            carDto.setLicensePlate(booking.getCar().getLicensePlate());
-            if (booking.getCar().getCategory() != null) {
-                VehicleCategoryDto categoryDto = new VehicleCategoryDto();
-                categoryDto.setId(booking.getCar().getCategory().getId());
-                categoryDto.setName(booking.getCar().getCategory().getName());
-                carDto.setCategory(categoryDto);
-            }
+            CarDto carDto = modelMapper.map(booking.getCar(), CarDto.class);
             dto.setCar(carDto);
         }
 
         // Ánh xạ Customer
         if (booking.getCustomer() != null) {
-            CustomerDto customerDto = new CustomerDto();
-            customerDto.setId(booking.getCustomer().getId());
-            customerDto.setName(booking.getCustomer().getName());
+            CustomerDto customerDto = modelMapper.map(booking.getCustomer(), CustomerDto.class);
             dto.setCustomer(customerDto);
         }
 
         // Ánh xạ Employee
         if (booking.getEmployee() != null) {
-            EmployeeDto employeeDto = new EmployeeDto();
-            employeeDto.setId(booking.getEmployee().getId());
-            employeeDto.setName(booking.getEmployee().getName());
+            EmployeeDto employeeDto = modelMapper.map(booking.getEmployee(), EmployeeDto.class);
             dto.setEmployee(employeeDto);
         }
 
@@ -350,11 +313,12 @@ public class BookingService {
             booking.setStatus("cancelled");
             Booking updatedBooking = bookingRepository.save(booking);
 
-            // Cập nhật trạng thái xe thành Available nếu đã booked
+            // Cập nhật trạng thái xe
             Car car = booking.getCar();
             if (car != null && "Rented".equals(car.getStatus())) {
                 car.setStatus("Available");
                 carRepository.save(car);
+                logger.debug("Updated car status to Available: carId={}", car.getId());
             }
             logger.info("Booking cancelled successfully for bookingId: {}", bookingId);
             return updatedBooking;
@@ -391,31 +355,19 @@ public class BookingService {
 
         // Ánh xạ Car
         if (booking.getCar() != null) {
-            CarDto carDto = new CarDto();
-            carDto.setId(booking.getCar().getId());
-            carDto.setLicensePlate(booking.getCar().getLicensePlate());
-            if (booking.getCar().getCategory() != null) {
-                VehicleCategoryDto categoryDto = new VehicleCategoryDto();
-                categoryDto.setId(booking.getCar().getCategory().getId());
-                categoryDto.setName(booking.getCar().getCategory().getName());
-                carDto.setCategory(categoryDto);
-            }
+            CarDto carDto = modelMapper.map(booking.getCar(), CarDto.class);
             response.setCar(carDto);
         }
 
         // Ánh xạ Customer
         if (booking.getCustomer() != null) {
-            CustomerDto customerDto = new CustomerDto();
-            customerDto.setId(booking.getCustomer().getId());
-            customerDto.setName(booking.getCustomer().getName());
+            CustomerDto customerDto = modelMapper.map(booking.getCustomer(), CustomerDto.class);
             response.setCustomer(customerDto);
         }
 
         // Ánh xạ Employee
         if (booking.getEmployee() != null) {
-            EmployeeDto employeeDto = new EmployeeDto();
-            employeeDto.setId(booking.getEmployee().getId());
-            employeeDto.setName(booking.getEmployee().getName());
+            EmployeeDto employeeDto = modelMapper.map(booking.getEmployee(), EmployeeDto.class);
             response.setEmployee(employeeDto);
         }
 

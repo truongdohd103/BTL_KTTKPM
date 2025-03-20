@@ -40,6 +40,128 @@ function displayResponse(message) {
     }
 }
 
+// Hàm lấy danh sách xe và điền vào dropdown
+async function populateCarDropdown() {
+    try {
+        const response = await fetch(`${baseUrl}/cars`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const cars = await response.json();
+        const carSelect = document.getElementById('createCarId');
+
+        carSelect.innerHTML = '<option value="">Select a car</option>';
+
+        cars.forEach(car => {
+            const option = document.createElement('option');
+            option.value = car.id;
+            option.textContent = `${car.category?.name || 'Unknown'} (${car.license_plate}) - $${car.price_per_day}/day`;
+            carSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error fetching cars:', error);
+        displayResponse('Error: Could not load car list');
+    }
+}
+
+// Gọi populateCarDropdown khi trang được tải
+document.addEventListener('DOMContentLoaded', () => {
+    const submitReturnButton = document.getElementById('submitReturn');
+    if (submitReturnButton) {
+        submitReturnButton.addEventListener('click', returnCar);
+    } else {
+        console.error('Submit Return button not found');
+    }
+
+    const submitCancelButton = document.getElementById('submitCancel');
+    if (submitCancelButton) {
+        submitCancelButton.addEventListener('click', cancelBooking);
+    } else {
+        console.error('Submit Cancel button not found');
+    }
+
+    const carIdInput = document.getElementById('createCarId');
+    const startDateInput = document.getElementById('createStartDate');
+    const endDateInput = document.getElementById('createEndDate');
+
+    if (carIdInput && startDateInput && endDateInput) {
+        carIdInput.addEventListener('change', updateTotalAmountDisplay);
+        startDateInput.addEventListener('change', updateTotalAmountDisplay);
+        endDateInput.addEventListener('change', updateTotalAmountDisplay);
+    } else {
+        console.error('One or more input fields for Total Amount display not found');
+    }
+
+    populateCarDropdown(); // Gọi hàm để điền danh sách xe
+});
+
+// Hàm lấy pricePerDay từ API dựa trên carId
+async function fetchPricePerDay(carId) {
+    try {
+        const response = await fetch(`${baseUrl}/cars/${carId}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText || 'No additional details'}`);
+        }
+
+        const car = await response.json();
+        if (!car.price_per_day) {
+            throw new Error('Price per day not available for this car');
+        }
+        return car.price_per_day;
+    } catch (error) {
+        console.error('Error fetching car price:', error);
+        displayResponse(`Error: Could not fetch car price for Car ID ${carId}. ${error.message}`);
+        return 0;
+    }
+}
+
+// Hàm tính số ngày giữa startDate và endDate
+function calculateDays(startDateStr, endDateStr) {
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+
+    const timeDiff = endDate - startDate;
+    const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+    return daysDiff > 0 ? daysDiff : 0;
+}
+
+// Hàm cập nhật Total Amount để hiển thị
+async function updateTotalAmountDisplay() {
+    const carId = document.getElementById('createCarId').value;
+    const startDate = document.getElementById('createStartDate').value;
+    const endDate = document.getElementById('createEndDate').value;
+    const totalAmountDisplay = document.getElementById('totalAmountDisplay');
+
+    if (carId && startDate && endDate) {
+        const pricePerDay = await fetchPricePerDay(carId);
+        if (pricePerDay === 0) {
+            totalAmountDisplay.textContent = 'Error: Could not fetch car price';
+            return;
+        }
+
+        const days = calculateDays(startDate, endDate);
+        if (days === 0) {
+            totalAmountDisplay.textContent = 'Error: Invalid date range';
+            return;
+        }
+
+        const totalAmount = pricePerDay * days;
+        totalAmountDisplay.textContent = `$${totalAmount.toFixed(2)}`;
+    } else {
+        totalAmountDisplay.textContent = '-';
+    }
+}
+
 // Function to create a booking
 async function createBooking() {
     const customerId = parseInt(document.getElementById('createCustomerId').value);
@@ -48,21 +170,16 @@ async function createBooking() {
     const startDate = document.getElementById('createStartDate').value;
     const endDate = document.getElementById('createEndDate').value;
     const status = document.getElementById('createStatus').value;
-    const totalAmount = parseFloat(document.getElementById('createTotalAmount').value);
     const discountCode = document.getElementById('createDiscountCode').value;
 
-    console.log('Debug - Input values:', { customerId, employeeId, carId, startDate, endDate, status, totalAmount, discountCode });
+    console.log('Debug - Input values:', { customerId, employeeId, carId, startDate, endDate, status, discountCode });
 
-    if (!customerId || !employeeId || !carId || !startDate || !endDate || !status || !totalAmount) {
+    if (!customerId || !employeeId || !carId || !startDate || !endDate || !status) {
         displayResponse('Error: All required fields must be filled');
         return;
     }
     if (new Date(startDate) >= new Date(endDate)) {
         displayResponse('Error: Start date must be before end date');
-        return;
-    }
-    if (isNaN(totalAmount) || totalAmount <= 0) {
-        displayResponse('Error: Total amount must be a positive number');
         return;
     }
 
@@ -77,7 +194,6 @@ async function createBooking() {
                 start_date: startDate,
                 end_date: endDate,
                 status: status,
-                total_amount: totalAmount,
                 discount_code: discountCode || null
             })
         });
@@ -106,8 +222,8 @@ async function createBooking() {
         document.getElementById('createStartDate').value = '';
         document.getElementById('createEndDate').value = '';
         document.getElementById('createStatus').value = 'pending';
-        document.getElementById('createTotalAmount').value = '';
         document.getElementById('createDiscountCode').value = '';
+        document.getElementById('totalAmountDisplay').textContent = '-';
     } catch (error) {
         displayResponse(`Error: ${error.message}`);
     }
@@ -337,7 +453,7 @@ async function getPickedUpBookings() {
                 ID: booking.id,
                 Customer: booking.customer?.name || booking.customer_id || 'N/A',
                 Employee: booking.employee?.name || booking.employee_id || 'N/A',
-                Car: booking.car?.licensePlate || booking.car_id || 'N/A',
+                Car: booking.car?.license_plate || booking.car_id || 'N/A',
                 'Start Date': booking.start_date || 'N/A',
                 'End Date': booking.end_date || 'N/A',
                 Status: booking.status || 'N/A',
@@ -373,12 +489,16 @@ async function getPickedUpBookings() {
                 `;
 
                 data.forEach(booking => {
+                    const carInfo = booking.car && booking.car.category && booking.car.license_plate
+                        ? `${booking.car.category.name} (${booking.car.license_plate})`
+                        : 'N/A';
+
                     tableHTML += `
                         <tr class="hover:bg-gray-100">
                             <td class="py-2 px-4 border-b">${booking.id || 'N/A'}</td>
                             <td class="py-2 px-4 border-b">${booking.customer?.name || booking.customer_id || 'N/A'}</td>
                             <td class="py-2 px-4 border-b">${booking.employee?.name || booking.employee_id || 'N/A'}</td>
-                            <td class="py-2 px-4 border-b">${booking.car?.licensePlate || booking.car_id || 'N/A'} (${booking.car?.category?.name || 'N/A'})</td>
+                            <td class="py-2 px-4 border-b">${carInfo}</td>
                             <td class="py-2 px-4 border-b">${booking.start_date || 'N/A'}</td>
                             <td class="py-2 px-4 border-b">${booking.end_date || 'N/A'}</td>
                             <td class="py-2 px-4 border-b">${booking.status || 'N/A'}</td>
@@ -412,7 +532,7 @@ async function getPickedUpBookings() {
     }
 }
 
-// Add event listeners for buttons that are not directly called from HTML
+// Add event listeners for buttons and inputs
 document.addEventListener('DOMContentLoaded', () => {
     const submitReturnButton = document.getElementById('submitReturn');
     if (submitReturnButton) {
@@ -426,5 +546,18 @@ document.addEventListener('DOMContentLoaded', () => {
         submitCancelButton.addEventListener('click', cancelBooking);
     } else {
         console.error('Submit Cancel button not found');
+    }
+
+    // Thêm event listeners để cập nhật Total Amount hiển thị
+    const carIdInput = document.getElementById('createCarId');
+    const startDateInput = document.getElementById('createStartDate');
+    const endDateInput = document.getElementById('createEndDate');
+
+    if (carIdInput && startDateInput && endDateInput) {
+        carIdInput.addEventListener('change', updateTotalAmountDisplay);
+        startDateInput.addEventListener('change', updateTotalAmountDisplay);
+        endDateInput.addEventListener('change', updateTotalAmountDisplay);
+    } else {
+        console.error('One or more input fields for Total Amount display not found');
     }
 });

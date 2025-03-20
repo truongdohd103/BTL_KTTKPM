@@ -43,8 +43,10 @@
           <input type="number" id="createEmployeeId" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
         </div>
         <div>
-          <label for="createCarId" class="block text-xs font-medium text-gray-600">Car ID</label>
-          <input type="number" id="createCarId" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+          <label for="createCarId" class="block text-xs font-medium text-gray-600">Car</label>
+          <select id="createCarId" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+            <option value="">Select a car</option>
+          </select>
         </div>
         <div>
           <label for="createStartDate" class="block text-xs font-medium text-gray-600">Start Date</label>
@@ -63,9 +65,10 @@
             <option value="completed">Completed</option>
           </select>
         </div>
+        <!-- Hiển thị Total Amount (tùy chọn) -->
         <div>
-          <label for="createTotalAmount" class="block text-xs font-medium text-gray-600">Total Amount</label>
-          <input type="number" id="createTotalAmount" step="0.01" required class="mt-1 w-full p-2 text-sm border rounded-md focus:ring focus:ring-indigo-300">
+          <label class="block text-xs font-medium text-gray-600">Total Amount</label>
+          <p id="totalAmountDisplay" class="mt-1 text-sm text-gray-800">-</p>
         </div>
         <div>
           <label for="createDiscountCode" class="block text-xs font-medium text-gray-600">Discount Code</label>
